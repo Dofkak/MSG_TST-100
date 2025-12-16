@@ -618,12 +618,19 @@ input.addEventListener("keydown", async (e) => {
     }
     
     try {
-      await supabase.from('messages').insert({
+      const { data, error } = await supabase.from('messages').insert({
         username: username,
         user_id: userId,
         text: msg
       });
+      
+      if (error) {
+        console.error('Insert error:', error);
+        print(`[ERROR] Failed to send: ${error.message}`, true);
+        flicker();
+      }
     } catch (err) {
+      console.error('Catch error:', err);
       print(`[ERROR] Failed to send: ${err.message}`, true);
       flicker();
     }
