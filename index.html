@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TERMINAL_CHAT</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>></text></svg>">
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #050805;
+  height: 100%;
+  font-family: "Courier New", monospace;
+  overflow: hidden;
+}
+
+#crt {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  padding: 40px 20px;
+  padding-bottom: 120px;
+  box-sizing: border-box;
+  color: #66ff99;
+  text-shadow: 0 0 5px rgba(102,255,153,0.7);
+  filter: blur(0.2px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+#crt::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  border-radius: 30px;
+  pointer-events: none;
+  box-shadow: inset 0 0 80px rgba(0,0,0,0.8);
+  z-index: 100;
+  height: 100vh;
+  height: 100dvh;
+}
+
+#crt::-webkit-scrollbar {
+  width: 10px;
+}
+
+#crt::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.3);
+}
+
+#crt::-webkit-scrollbar-thumb {
+  background: #66ff99;
+  border-radius: 5px;
+}
+
+#scanlines {
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.12),
+    rgba(0,0,0,0.12) 1px,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,0) 4px
+  );
+  pointer-events: none;
+  z-index: 99;
+  height: 100vh;
+  height: 100dvh;
+}
+
+#output {
+  white-space: pre-wrap;
+  overflow-x: auto;
+  line-height: 1.6;
+  margin-bottom: 10px;
+  word-wrap: break-word;
+}
+
+.message {
+  margin: 5px 0;
+}
+
+.system-msg {
+  color: #88ffaa;
+  font-weight: bold;
+}
+
+.user-msg {
+  color: #66ff99;
+}
+
+.own-msg {
+  color: #99ffdd;
+}
+
+.timestamp {
+  color: #447755;
+  font-size: 13px;
+}
+
+.username {
+  color: #88ffaa;
+  font-weight: bold;
+}
+
+#input-line {
+  display: flex;
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  background: #050805;
+  padding: 10px;
+  z-index: 101;
+  border-top: 1px solid #447755;
+}
+
+#prompt {
+  margin-right: 5px;
+  color: #88ffaa;
+  text-shadow: 0 0 6px rgba(136,255,170,0.8);
+}
+
+#cursor {
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+#real-input {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  z-index: 102;
+  width: 100%;
+  height: 50px;
+}
+
+@keyframes flicker {
+  0% { opacity: 1; }
+  50% { opacity: 0.96; }
+  100% { opacity: 1; }
+}
+
+.flicker {
+  animation: flicker 0.15s;
+}
+
+#username-prompt {
+  position: fixed;
+  inset: 0;
+  background: rgba(5,8,5,0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+#config-box {
+  background: #050805;
+  border: 2px solid #66ff99;
+  padding: 30px;
+  box-shadow: 0 0 20px rgba(102,255,153,0.5);
+  max-width: 500px;
+}
+
+#config-box h2 {
+  color: #88ffaa;
+  margin: 5px 0;
+  text-shadow: 0 0 8px rgba(136,255,170,0.8);
+}
+
+#config-box input {
+  background: #0a0f0a;
+  border: 1px solid #66ff99;
+  color: #66ff99;
+  padding: 8px;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+  width: 100%;
+  margin: 5px 0 15px 0;
+  box-sizing: border-box;
+}
+
+#config-box input:focus {
+  outline: none;
+  box-shadow: 0 0 10px rgba(102,255,153,0.5);
+}
+
+.config-label {
+  color: #88ffaa;
+  font-size: 14px;
+  display: block;
+  margin-top: 10px;
+}
+
+.help-text {
+  color: #447755;
+  font-size: 12px;
+  margin: 5px 0;
+}
+
+#username-btn {
+  background: #66ff99;
+  color: #050805;
+  border: none;
+  padding: 10px 30px;
+  font-family: "Courier New", monospace;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 15px;
+  width: 100%;
+}
+
+#username-btn:hover {
+  background: #88ffaa;
+}
+
+#username-btn:disabled {
+  background: #447755;
+  cursor: not-allowed;
+}
+
+.connection-status {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  padding: 5px 10px;
+  background: rgba(5,8,5,0.8);
+  border: 1px solid #66ff99;
+  color: #66ff99;
+  font-size: 12px;
+  z-index: 101;
+  border-radius: 3px;
+}
+
+.status-online {
+  color: #66ff99;
+}
+
+.status-offline {
+  color: #ff6666;
+}
+</style>
+</head>
+
+<body>
+<div id="username-prompt">
+  <div id="config-box">
+    <h2>╔═══════════════════════════╗</h2>
+    <h2>║   SUPABASE CONFIG   ║</h2>
+    <h2>╚═══════════════════════════╝</h2>
+    
+    <label class="config-label">SUPABASE URL:</label>
+    <input type="text" id="supabase-url" placeholder="https://xxxxx.supabase.co" value="https://pgeanqitzzygybuzwxov.supabase.co" />
+    
+    <label class="config-label">SUPABASE ANON KEY:</label>
+    <input type="text" id="supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBnZWFucWl0enp5Z3lidXp3eG92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4ODQ4OTUsImV4cCI6MjA4MTQ2MDg5NX0.U98Nv3eVxzeaMfmTj3gv7BxdwpGOho2VT0N-XMbfb9g" />
+    
+    <p class="help-text">Get these from: Project Settings > API</p>
+    
+    <label class="config-label">YOUR USERNAME:</label>
+    <input type="text" id="username-input" maxlength="20" placeholder="anonymous" />
+    
+    <button id="username-btn">CONNECT</button>
+  </div>
+</div>
+
+<div class="connection-status" id="status">
+  <span class="status-offline">● OFFLINE</span>
+</div>
+
+<div id="crt">
+  <div id="output"></div>
+  <div id="input-line">
+    <span id="prompt">CHAT></span>
+    <span id="typed"></span><span id="cursor">█</span>
+  </div>
+  <div id="scanlines"></div>
+</div>
+
+<input id="real-input" />
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+let supabase = null;
+let username = '';
+let subscription = null;
+let isConnected = false;
+
+const output = document.getElementById("output");
+const typed = document.getElementById("typed");
+const input = document.getElementById("real-input");
+const crt = document.getElementById("crt");
+const usernamePrompt = document.getElementById("username-prompt");
+const usernameInput = document.getElementById("username-input");
+const usernameBtn = document.getElementById("username-btn");
+const supabaseUrl = document.getElementById("supabase-url");
+const supabaseKey = document.getElementById("supabase-key");
+const statusEl = document.getElementById("status");
+
+function formatTime(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function print(text, isSystem = false, isOwnMessage = false) {
+  const div = document.createElement('div');
+  div.className = 'message ' + (isSystem ? 'system-msg' : (isOwnMessage ? 'own-msg' : 'user-msg'));
+  div.textContent = text;
+  output.appendChild(div);
+  crt.scrollTop = crt.scrollHeight;
+}
+
+function updateStatus(online) {
+  isConnected = online;
+  statusEl.innerHTML = online 
+    ? '<span class="status-online">● ONLINE</span>'
+    : '<span class="status-offline">● OFFLINE</span>';
+}
+
+function flicker() {
+  crt.classList.add("flicker");
+  setTimeout(() => crt.classList.remove("flicker"), 150);
+}
+
+function bootSequence() {
+  print("╔═══════════════════════════════════════════╗", true);
+  print("║      TERMINAL_CHAT v1.0                   ║", true);
+  print("║      SECURE CHAT INTERFACE                ║", true);
+  print("╚═══════════════════════════════════════════╝", true);
+  print("", true);
+  print("SYNC: OK", true);
+  print("CONNECTING TO NETWORK....................DONE", true);
+  print("", true);
+  print("TYPE '/HELP' FOR AVAILABLE COMMANDS", true);
+  print("═══════════════════════════════════════════════════", true);
+  print("", true);
+}
+
+function handleCommand(cmd) {
+  const c = cmd.toUpperCase().trim();
+  
+  if (c === '/HELP') {
+    print("╔═══════════════════════════════════════════╗", true);
+    print("║           COMMAND REFERENCE               ║", true);
+    print("╠═══════════════════════════════════════════╣", true);
+    print("║ /HELP      - Show this help               ║", true);
+    print("║ /DATE      - Show current date/time       ║", true);
+    print("║ /WHOAMI    - Show your username           ║", true);
+    print("║ /CLEAR     - Clear screen                 ║", true);
+    print("║ /USERS     - List recent users            ║", true);
+    print("║ /COUNT     - Show message count           ║", true);
+    print("║ /PING      - Test connection              ║", true);
+    print("╚═══════════════════════════════════════════╝", true);
+    return true;
+  }
+  
+  if (c === '/DATE') {
+    const now = new Date();
+    print(`[SYSTEM] ${now.toLocaleString()}`, true);
+    return true;
+  }
+  
+  if (c === '/WHOAMI') {
+    print(`[SYSTEM] You are: ${username}`, true);
+    return true;
+  }
+  
+  if (c === '/CLEAR') {
+    output.innerHTML = '';
+    bootSequence();
+    return true;
+  }
+  
+  if (c === '/USERS') {
+    print("[SYSTEM] Fetching recent users...", true);
+    fetchRecentUsers();
+    return true;
+  }
+  
+  if (c === '/COUNT') {
+    print("[SYSTEM] Counting messages...", true);
+    countMessages();
+    return true;
+  }
+  
+  if (c === '/PING') {
+    print("[SYSTEM] Testing connection...", true);
+    testConnection();
+    return true;
+  }
+  
+  return false;
+}
+
+async function testConnection() {
+  try {
+    const start = Date.now();
+    const { data, error } = await supabase.from('messages').select('id').limit(1);
+    const latency = Date.now() - start;
+    
+    if (error) throw error;
+    print(`[SYSTEM] PONG! Latency: ${latency}ms`, true);
+  } catch (err) {
+    print(`[SYSTEM] Connection test failed: ${err.message}`, true);
+  }
+}
+
+async function countMessages() {
+  try {
+    const { count, error } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true });
+    
+    if (error) throw error;
+    print(`[SYSTEM] Total messages in database: ${count}`, true);
+  } catch (err) {
+    print(`[SYSTEM] Error counting messages: ${err.message}`, true);
+  }
+}
+
+async function fetchRecentUsers() {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('username')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) throw error;
+    
+    const uniqueUsers = [...new Set(data.map(m => m.username))].filter(u => u !== 'SYSTEM');
+    print(`[SYSTEM] Recent users (${uniqueUsers.length}): ${uniqueUsers.join(', ')}`, true);
+  } catch (err) {
+    print(`[SYSTEM] Error fetching users: ${err.message}`, true);
+  }
+}
+
+async function loadRecentMessages() {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) throw error;
+    
+    data.reverse().forEach(msg => {
+      const time = formatTime(msg.created_at);
+      const isOwnMessage = msg.username === username;
+      const isSystemMessage = msg.username === 'SYSTEM';
+      
+      if (isSystemMessage) {
+        print(`${time} [SYSTEM] ${msg.text}`, true);
+      } else {
+        const prefix = isOwnMessage ? "[YOU]" : `[${msg.username}]`;
+        print(`${time} ${prefix} ${msg.text}`, false, isOwnMessage);
+      }
+    });
+  } catch (err) {
+    print(`[SYSTEM] Error loading messages: ${err.message}`, true);
+  }
+}
+
+usernameBtn.addEventListener('click', async () => {
+  const url = supabaseUrl.value.trim();
+  const key = supabaseKey.value.trim();
+  const name = usernameInput.value.trim() || 'anonymous';
+  
+  if (!url || !key) {
+    alert('Please enter both Supabase URL and Key');
+    return;
+  }
+  
+  usernameBtn.disabled = true;
+  usernameBtn.textContent = 'CONNECTING...';
+  
+  try {
+    supabase = createClient(url, key);
+    username = name;
+    
+    await supabase.from('messages').select('id').limit(1);
+    
+    usernamePrompt.style.display = 'none';
+    input.focus({ preventScroll: true });
+    updateStatus(true);
+    
+    bootSequence();
+    await loadRecentMessages();
+    
+    subscription = supabase
+      .channel('messages')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const msg = payload.new;
+          const time = formatTime(msg.created_at);
+          const isOwnMessage = msg.username === username;
+          const isSystemMessage = msg.username === 'SYSTEM';
+          
+          if (isSystemMessage) {
+            print(`${time} [SYSTEM] ${msg.text}`, true);
+          } else {
+            const prefix = isOwnMessage ? "[YOU]" : `[${msg.username}]`;
+            print(`${time} ${prefix} ${msg.text}`, false, isOwnMessage);
+          }
+          
+          if (!isOwnMessage) {
+            flicker();
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          updateStatus(true);
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          updateStatus(false);
+        }
+      });
+    
+    await supabase.from('messages').insert({
+      username: 'SYSTEM',
+      text: `${username} has joined the chat`
+    });
+    
+  } catch (err) {
+    alert('Connection failed: ' + err.message);
+    usernamePrompt.style.display = 'flex';
+    usernameBtn.disabled = false;
+    usernameBtn.textContent = 'CONNECT';
+  }
+});
+
+input.addEventListener("input", () => {
+  typed.textContent = input.value;
+});
+
+input.addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    const msg = input.value.trim();
+    input.value = "";
+    typed.textContent = "";
+    
+    if (!msg) return;
+    
+    if (msg.startsWith('/')) {
+      handleCommand(msg);
+      return;
+    }
+    
+    if (!isConnected) {
+      print("[ERROR] Not connected to server", true);
+      flicker();
+      return;
+    }
+    
+    try {
+      await supabase.from('messages').insert({
+        username: username,
+        text: msg
+      });
+    } catch (err) {
+      print(`[ERROR] Failed to send: ${err.message}`, true);
+      flicker();
+    }
+  }
+});
+
+document.body.addEventListener("click", () => {
+  if (usernamePrompt.style.display === 'none') {
+    input.focus({ preventScroll: true });
+  }
+});
+
+usernameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    usernameBtn.click();
+  }
+});
+
+setInterval(() => {
+  if (Math.random() < 0.05) flicker();
+}, 3000);
+</script>
+</body>
+</html>
