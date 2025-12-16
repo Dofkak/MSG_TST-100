@@ -332,15 +332,25 @@ const userIdDisplay = document.getElementById("user-id-display");
 const userIdText = document.getElementById("user-id-text");
 
 function generateUserId() {
-  // Check if user already has an ID stored
-  let storedId = localStorage.getItem('terminal_chat_user_id');
-  if (storedId) {
-    return storedId;
+  // Check if user already has an ID stored in localStorage
+  try {
+    let storedId = localStorage.getItem('terminal_chat_user_id');
+    if (storedId) {
+      console.log('Retrieved existing user ID:', storedId);
+      return storedId;
+    }
+  } catch (e) {
+    console.error('LocalStorage not available:', e);
   }
   
   // Generate new ID and store it
   const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
-  localStorage.setItem('terminal_chat_user_id', newId);
+  try {
+    localStorage.setItem('terminal_chat_user_id', newId);
+    console.log('Generated and stored new user ID:', newId);
+  } catch (e) {
+    console.error('Failed to store user ID:', e);
+  }
   return newId;
 }
 
