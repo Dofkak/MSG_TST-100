@@ -520,6 +520,25 @@ async function fetchRecentUsers() {
   }
 }
 
+async function cleanupOldMessages() {
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .lt('created_at', oneHourAgo);
+    
+    if (error) {
+      console.error('Cleanup error:', error);
+    } else {
+      console.log('Cleaned up messages older than 1 hour');
+    }
+  } catch (err) {
+    console.error('Cleanup failed:', err);
+  }
+}
+
 async function loadRecentMessages() {
   try {
     const { data, error } = await supabase
@@ -581,6 +600,12 @@ usernameBtn.addEventListener('click', async () => {
     
     bootSequence();
     await loadRecentMessages();
+    
+    // Clean up old messages on connect
+    await cleanupOldMessages();
+    
+    // Run cleanup every 5 minutes
+    setInterval(cleanupOldMessages, 5 * 60 * 1000);
     
     // Set up realtime subscription with proper channel name
     const channelName = 'public:messages';
