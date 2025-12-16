@@ -332,7 +332,16 @@ const userIdDisplay = document.getElementById("user-id-display");
 const userIdText = document.getElementById("user-id-text");
 
 function generateUserId() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  // Check if user already has an ID stored
+  let storedId = localStorage.getItem('terminal_chat_user_id');
+  if (storedId) {
+    return storedId;
+  }
+  
+  // Generate new ID and store it
+  const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  localStorage.setItem('terminal_chat_user_id', newId);
+  return newId;
 }
 
 function formatTime(timestamp) {
@@ -531,7 +540,7 @@ usernameBtn.addEventListener('click', async () => {
   try {
     supabase = createClient(url, key);
     username = name;
-    userId = generateUserId();
+    userId = generateUserId(); // This will now retrieve or create a persistent ID
     
     // Test connection
     await supabase.from('messages').select('id').limit(1);
