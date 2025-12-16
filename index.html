@@ -582,8 +582,8 @@ usernameBtn.addEventListener('click', async () => {
     // Send join message
     await supabase.from('messages').insert({
       username: 'SYSTEM',
-      user_id: 'SYSTEM',
-      text: `${username} has joined the chat`
+      text: `${username} has joined the chat`,
+      topic: 'chat'
     });
     
   } catch (err) {
@@ -620,8 +620,8 @@ input.addEventListener("keydown", async (e) => {
     try {
       const { data, error } = await supabase.from('messages').insert({
         username: username,
-        user_id: userId,
-        text: msg
+        text: msg,
+        topic: 'chat'
       });
       
       if (error) {
