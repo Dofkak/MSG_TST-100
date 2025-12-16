@@ -479,26 +479,28 @@ async function countMessages() {
 
 async function fetchRecentUsers() {
   try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('user_id, username')
-      .order('created_at', { ascending: false })
-      .limit(100);
-    
-    if (error) throw error;
-    
-    const uniqueUsers = new Map();
-    data.forEach(m => {
-      if (m.user_id && m.user_id !== 'SYSTEM' && !uniqueUsers.has(m.user_id)) {
-        uniqueUsers.set(m.user_id, m.username || 'anonymous');
+    // Get list of currently connected users from realtime presence
+    if (channelInstance) {
+      const presenceState = channelInstance.presenceState();
+      const activeUsers = [];
+      
+      // Extract user info from presence state
+      for (const key in presenceState) {
+        presenceState[key].forEach(presence => {
+          if (presence.user_id && presence.user_id !== 'SYSTEM') {
+            activeUsers.push(`[${presence.user_id}]`);
+          }
+        });
       }
-    });
-    
-    const userList = Array.from(uniqueUsers.entries())
-      .map(([id, name]) => `[${id}] ${name}`)
-      .join(', ');
-    
-    print(`[SYSTEM] Recent users (${uniqueUsers.size}): ${userList}`, true);
+      
+      if (activeUsers.length > 0) {
+        print(`[SYSTEM] Active users (${activeUsers.length}): ${activeUsers.join(', ')}`, true);
+      } else {
+        print(`[SYSTEM] No other active users detected`, true);
+      }
+    } else {
+      print(`[SYSTEM] Cannot fetch active users - not connected`, true);
+    }
   } catch (err) {
     print(`[SYSTEM] Error fetching users: ${err.message}`, true);
   }
@@ -600,11 +602,27 @@ usernameBtn.addEventListener('click', async () => {
           }
         }
       )
-      .subscribe((status) => {
+      .on('presence', { event: 'sync' }, () => {
+        console.log('Presence synced');
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log('User joined:', newPresences);
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log('User left:', leftPresences);
+      })
+      .subscribe(async (status) => {
         console.log('Subscription status:', status);
         if (status === 'SUBSCRIBED') {
           updateStatus(true);
           print("[SYSTEM] Realtime connection established", true);
+          
+          // Track presence
+          await channelInstance.track({
+            user_id: userId,
+            username: username,
+            online_at: new Date().toISOString()
+          });
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           updateStatus(false);
           print("[SYSTEM] Realtime connection lost", true);
