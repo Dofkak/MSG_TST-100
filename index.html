@@ -99,16 +99,6 @@ html, body {
   color: #99ffdd;
 }
 
-.timestamp {
-  color: #447755;
-  font-size: 13px;
-}
-
-.username {
-  color: #88ffaa;
-  font-weight: bold;
-}
-
 #input-line {
   display: flex;
   position: fixed;
@@ -251,6 +241,23 @@ html, body {
 .status-offline {
   color: #ff6666;
 }
+
+.user-id-display {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  padding: 5px 10px;
+  background: rgba(5,8,5,0.8);
+  border: 1px solid #66ff99;
+  color: #66ff99;
+  font-size: 11px;
+  z-index: 101;
+  border-radius: 3px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>
 </head>
 
@@ -276,6 +283,10 @@ html, body {
   </div>
 </div>
 
+<div class="user-id-display" id="user-id-display" style="display:none;">
+  ID: <span id="user-id-text"></span>
+</div>
+
 <div class="connection-status" id="status">
   <span class="status-offline">● OFFLINE</span>
 </div>
@@ -296,8 +307,10 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 let supabase = null;
 let username = '';
+let userId = '';
 let subscription = null;
 let isConnected = false;
+let channelInstance = null;
 
 const output = document.getElementById("output");
 const typed = document.getElementById("typed");
@@ -309,6 +322,12 @@ const usernameBtn = document.getElementById("username-btn");
 const supabaseUrl = document.getElementById("supabase-url");
 const supabaseKey = document.getElementById("supabase-key");
 const statusEl = document.getElementById("status");
+const userIdDisplay = document.getElementById("user-id-display");
+const userIdText = document.getElementById("user-id-text");
+
+function generateUserId() {
+  return 'user_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
 function formatTime(timestamp) {
   const date = new Date(timestamp);
@@ -343,6 +362,7 @@ function bootSequence() {
   print("", true);
   print("SYNC: OK", true);
   print("CONNECTING TO NETWORK....................DONE", true);
+  print(`USER_ID: ${userId}`, true);
   print("", true);
   print("TYPE '/HELP' FOR AVAILABLE COMMANDS", true);
   print("═══════════════════════════════════════════════════", true);
@@ -358,7 +378,7 @@ function handleCommand(cmd) {
     print("╠═══════════════════════════════════════════╣", true);
     print("║ /HELP      - Show this help               ║", true);
     print("║ /DATE      - Show current date/time       ║", true);
-    print("║ /WHOAMI    - Show your username           ║", true);
+    print("║ /WHOAMI    - Show your username & ID      ║", true);
     print("║ /CLEAR     - Clear screen                 ║", true);
     print("║ /USERS     - List recent users            ║", true);
     print("║ /COUNT     - Show message count           ║", true);
@@ -374,7 +394,8 @@ function handleCommand(cmd) {
   }
   
   if (c === '/WHOAMI') {
-    print(`[SYSTEM] You are: ${username}`, true);
+    print(`[SYSTEM] Username: ${username}`, true);
+    print(`[SYSTEM] User ID: ${userId}`, true);
     return true;
   }
   
@@ -435,13 +456,22 @@ async function fetchRecentUsers() {
   try {
     const { data, error } = await supabase
       .from('messages')
-      .select('username')
+      .select('username, user_id')
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
     
     if (error) throw error;
     
-    const uniqueUsers = [...new Set(data.map(m => m.username))].filter(u => u !== 'SYSTEM');
+    const uniqueUsers = [];
+    const seenIds = new Set();
+    
+    data.forEach(msg => {
+      if (msg.user_id && !seenIds.has(msg.user_id) && msg.username !== 'SYSTEM') {
+        seenIds.add(msg.user_id);
+        uniqueUsers.push(msg.username);
+      }
+    });
+    
     print(`[SYSTEM] Recent users (${uniqueUsers.length}): ${uniqueUsers.join(', ')}`, true);
   } catch (err) {
     print(`[SYSTEM] Error fetching users: ${err.message}`, true);
@@ -460,7 +490,7 @@ async function loadRecentMessages() {
     
     data.reverse().forEach(msg => {
       const time = formatTime(msg.created_at);
-      const isOwnMessage = msg.username === username;
+      const isOwnMessage = msg.user_id === userId;
       const isSystemMessage = msg.username === 'SYSTEM';
       
       if (isSystemMessage) {
@@ -491,24 +521,39 @@ usernameBtn.addEventListener('click', async () => {
   try {
     supabase = createClient(url, key);
     username = name;
+    userId = generateUserId();
     
+    // Test connection
     await supabase.from('messages').select('id').limit(1);
     
     usernamePrompt.style.display = 'none';
     input.focus({ preventScroll: true });
     updateStatus(true);
     
+    // Show user ID
+    userIdDisplay.style.display = 'block';
+    userIdText.textContent = userId;
+    
     bootSequence();
     await loadRecentMessages();
     
-    subscription = supabase
-      .channel('messages')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'messages' },
+    // Set up realtime subscription with proper channel name
+    const channelName = 'public:messages';
+    channelInstance = supabase.channel(channelName);
+    
+    channelInstance
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages'
+        },
         (payload) => {
+          console.log('Received message:', payload);
           const msg = payload.new;
           const time = formatTime(msg.created_at);
-          const isOwnMessage = msg.username === username;
+          const isOwnMessage = msg.user_id === userId;
           const isSystemMessage = msg.username === 'SYSTEM';
           
           if (isSystemMessage) {
@@ -524,15 +569,20 @@ usernameBtn.addEventListener('click', async () => {
         }
       )
       .subscribe((status) => {
+        console.log('Subscription status:', status);
         if (status === 'SUBSCRIBED') {
           updateStatus(true);
+          print("[SYSTEM] Realtime connection established", true);
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           updateStatus(false);
+          print("[SYSTEM] Realtime connection lost", true);
         }
       });
     
+    // Send join message
     await supabase.from('messages').insert({
       username: 'SYSTEM',
+      user_id: 'SYSTEM',
       text: `${username} has joined the chat`
     });
     
@@ -570,6 +620,7 @@ input.addEventListener("keydown", async (e) => {
     try {
       await supabase.from('messages').insert({
         username: username,
+        user_id: userId,
         text: msg
       });
     } catch (err) {
