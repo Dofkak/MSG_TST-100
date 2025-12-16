@@ -456,21 +456,13 @@ async function fetchRecentUsers() {
   try {
     const { data, error } = await supabase
       .from('messages')
-      .select('username, user_id')
+      .select('username')
       .order('created_at', { ascending: false })
       .limit(100);
     
     if (error) throw error;
     
-    const uniqueUsers = [];
-    const seenIds = new Set();
-    
-    data.forEach(msg => {
-      if (msg.user_id && !seenIds.has(msg.user_id) && msg.username !== 'SYSTEM') {
-        seenIds.add(msg.user_id);
-        uniqueUsers.push(msg.username);
-      }
-    });
+    const uniqueUsers = [...new Set(data.map(m => m.username))].filter(u => u !== 'SYSTEM');
     
     print(`[SYSTEM] Recent users (${uniqueUsers.length}): ${uniqueUsers.join(', ')}`, true);
   } catch (err) {
@@ -490,7 +482,7 @@ async function loadRecentMessages() {
     
     data.reverse().forEach(msg => {
       const time = formatTime(msg.created_at);
-      const isOwnMessage = msg.user_id === userId;
+      const isOwnMessage = msg.username === username;
       const isSystemMessage = msg.username === 'SYSTEM';
       
       if (isSystemMessage) {
@@ -553,7 +545,7 @@ usernameBtn.addEventListener('click', async () => {
           console.log('Received message:', payload);
           const msg = payload.new;
           const time = formatTime(msg.created_at);
-          const isOwnMessage = msg.user_id === userId;
+          const isOwnMessage = msg.username === username;
           const isSystemMessage = msg.username === 'SYSTEM';
           
           if (isSystemMessage) {
