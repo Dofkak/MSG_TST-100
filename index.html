@@ -158,6 +158,15 @@ html, body {
   100% { opacity: 1; }
 }
 
+@keyframes glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
 .flicker {
   animation: flicker 0.15s;
 }
@@ -373,6 +382,45 @@ function formatTime(timestamp) {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+function parseMessageMarkup(text) {
+  // Escape HTML first to prevent XSS
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+  
+  // Parse color tags: [red]text[/red], [blue]text[/blue], etc.
+  const colorMap = {
+    'red': '#ff6666',
+    'blue': '#6699ff',
+    'yellow': '#ffff66',
+    'purple': '#cc66ff',
+    'cyan': '#66ffff',
+    'orange': '#ffaa66',
+    'pink': '#ff99cc',
+    'green': '#66ff99'
+  };
+  
+  // Replace color tags
+  Object.keys(colorMap).forEach(color => {
+    const regex = new RegExp(`\\[${color}\\](.*?)\\[\\/${color}\\]`, 'gi');
+    escaped = escaped.replace(regex, `<span style="color:${colorMap[color]};text-shadow:0 0 5px ${colorMap[color]}80">$1</span>`);
+  });
+  
+  // Parse bold: [b]text[/b]
+  escaped = escaped.replace(/\[b\](.*?)\[\/b\]/gi, '<strong>$1</strong>');
+  
+  // Parse italic: [i]text[/i]
+  escaped = escaped.replace(/\[i\](.*?)\[\/i\]/gi, '<em style="font-style:italic">$1</em>');
+  
+  // Parse glitch effect: [glitch]text[/glitch]
+  escaped = escaped.replace(/\[glitch\](.*?)\[\/glitch\]/gi, '<span style="animation:glitch 0.3s infinite;display:inline-block">$1</span>');
+  
+  return escaped;
+}
+
 function print(text, isSystem = false, isOwnMessage = false) {
   const div = document.createElement('div');
   div.className = 'message ' + (isSystem ? 'system-msg' : (isOwnMessage ? 'own-msg' : 'user-msg'));
@@ -422,6 +470,28 @@ function handleCommand(cmd) {
     print("║ /USERS     - List recent users            ║", true);
     print("║ /COUNT     - Show message count           ║", true);
     print("║ /PING      - Test connection              ║", true);
+    print("║ /MARKUP    - Show text formatting help    ║", true);
+    print("╚═══════════════════════════════════════════╝", true);
+    return true;
+  }
+  
+  if (c === '/MARKUP') {
+    print("╔═══════════════════════════════════════════╗", true);
+    print("║        TEXT FORMATTING COMMANDS           ║", true);
+    print("╠═══════════════════════════════════════════╣", true);
+    print("║ [red]text[/red]     - Red text            ║", true);
+    print("║ [blue]text[/blue]   - Blue text           ║", true);
+    print("║ [yellow]text[/yellow] - Yellow text       ║", true);
+    print("║ [purple]text[/purple] - Purple text       ║", true);
+    print("║ [cyan]text[/cyan]   - Cyan text           ║", true);
+    print("║ [orange]text[/orange] - Orange text       ║", true);
+    print("║ [pink]text[/pink]   - Pink text           ║", true);
+    print("║ [green]text[/green] - Green text          ║", true);
+    print("║ [b]text[/b]         - Bold text           ║", true);
+    print("║ [i]text[/i]         - Italic text         ║", true);
+    print("║ [glitch]text[/glitch] - Glitch effect     ║", true);
+    print("╠═══════════════════════════════════════════╣", true);
+    print("║ Example: [red]I'm evil[/red] [b]bold![/b]║", true);
     print("╚═══════════════════════════════════════════╝", true);
     return true;
   }
@@ -520,25 +590,6 @@ async function fetchRecentUsers() {
   }
 }
 
-async function cleanupOldMessages() {
-  try {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    
-    const { error } = await supabase
-      .from('messages')
-      .delete()
-      .lt('created_at', oneHourAgo);
-    
-    if (error) {
-      console.error('Cleanup error:', error);
-    } else {
-      console.log('Cleaned up messages older than 1 hour');
-    }
-  } catch (err) {
-    console.error('Cleanup failed:', err);
-  }
-}
-
 async function loadRecentMessages() {
   try {
     const { data, error } = await supabase
@@ -561,7 +612,7 @@ async function loadRecentMessages() {
         const prefix = isOwnMessage 
           ? `<span class="user-id">[${msg.user_id}]</span> <span style="color:#99ffdd">${displayName}</span>` 
           : `<span class="user-id">[${msg.user_id}]</span> ${displayName}`;
-        print(`${time} ${prefix}: ${msg.text}`, false, isOwnMessage);
+        print(`${time} ${prefix}: ${parseMessageMarkup(msg.text)}`, false, isOwnMessage);
       }
     });
   } catch (err) {
@@ -601,12 +652,6 @@ usernameBtn.addEventListener('click', async () => {
     bootSequence();
     await loadRecentMessages();
     
-    // Clean up old messages on connect
-    await cleanupOldMessages();
-    
-    // Run cleanup every 5 minutes
-    setInterval(cleanupOldMessages, 5 * 60 * 1000);
-    
     // Set up realtime subscription with proper channel name
     const channelName = 'public:messages';
     channelInstance = supabase.channel(channelName);
@@ -633,7 +678,7 @@ usernameBtn.addEventListener('click', async () => {
             const prefix = isOwnMessage 
               ? `<span class="user-id">[${msg.user_id}]</span> <span style="color:#99ffdd">${displayName}</span>` 
               : `<span class="user-id">[${msg.user_id}]</span> ${displayName}`;
-            print(`${time} ${prefix}: ${msg.text}`, false, isOwnMessage);
+            print(`${time} ${prefix}: ${parseMessageMarkup(msg.text)}`, false, isOwnMessage);
           }
           
           if (!isOwnMessage) {
